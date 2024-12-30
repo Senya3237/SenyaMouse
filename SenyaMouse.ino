@@ -27,7 +27,7 @@ enum Walls {
   BOTH = 0b0110,
   UTURN = 0b1111
 };
-const float K = { 0.63 };  //0.72
+const float K = { 0.67 };  //0.72
 float DLcm = 0;
 float FLcm = 0;
 float DRcm = 0;
@@ -43,7 +43,7 @@ void turn180() {
   drive(0, 0);
   delay(100);
   drive(-40, 40);
-  delay(280);
+  delay(490);
 }
 
 float getVoltage() {
@@ -69,7 +69,7 @@ void turnRight() {
   digitalWrite(ledBlue, 1);
   while (DRcm > 10) {
     readSensorsCM();
-    drive(65, 35);
+    drive(70, 30);
   }
   digitalWrite(ledBlue, 0);
 }
@@ -174,8 +174,9 @@ void raseLeft() {
 }
 
 void raseRight() {
-  const float KR = 1.8;
+  const float KR = 1.2;
   while (1) {
+    // float v = getVoltage() + 0.2;
     readSensorsCM();
     byte event = getEventSensors();
     // if (FLcm < THf && DLcm < THf && DRcm < THf && FRcm < THf) {
@@ -184,6 +185,22 @@ void raseRight() {
     //   delay(690);
     // }
     //else
+    if (event != BOTH) {
+      drive(0, 0);
+      Serial.print(FLcm);
+      Serial.print("    ");
+      Serial.print(DLcm);
+      Serial.print("    ");
+      Serial.print(DRcm);
+      Serial.print("    ");
+      Serial.println(FRcm);
+      Serial.print("    ");
+      Serial.println(DLcm + FLcm - DRcm - FRcm);
+      while (1) {
+      }
+    }
+
+
     if (event == UTURN) {
       turn180();
     }
@@ -197,12 +214,13 @@ void raseRight() {
     if (event == BOTH) {
       int delta = DLcm - (DRcm - 4);
       drive(speed - K * delta, speed + K * delta);
-    } else if (event == RIGHT) {
-      turnRight();
-    } else if (event == LEFT) {
-      int delta = 14 - DRcm;
-      drive(speed - KR * delta, speed + KR * delta);
     }
+    //  else if (event == RIGHT) {
+    //   turnRight();
+    // } else if (event == LEFT) {
+    //   int delta = 14 - DRcm;
+    //   drive(speed - KR * delta, speed + KR * delta);
+    // }
     if (Serial.available()) {
       char c = Serial.read();
       if (c == 's') {
@@ -288,7 +306,7 @@ void readSensorsCM() {
 
 void printSensorsCM() {
   readSensorsCM();
-  float r = getVoltage();
+  float r = getVoltage() + 0.2;
   byte event = getEventSensors();
   String strBin = getBinStr(event);
   Serial.print(FLcm);
@@ -381,13 +399,13 @@ void setup() {
 }
 
 void loop() {
-  // if (mode == 1) {
-  //   raseLeft();
-  // } else if (mode == 2) {
-  //   raseRight();
-  // } else {
-  //   rase();
-  // }
+  if (mode == 1) {
+    raseLeft();
+  } else if (mode == 2) {
+    raseRight();
+  } else {
+    rase();
+  }
   if (Serial.available()) {
     char c = Serial.read();
     if (c == 'r') {
@@ -407,5 +425,5 @@ void loop() {
       rase();
     }
   }
-  delay(100);
+  // delay(100);
 }
