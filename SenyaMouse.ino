@@ -1,3 +1,9 @@
+#include "I2Cdev.h"
+#include "MPU6050_6Axis_MotionApps20.h"
+MPU6050 mpu;
+const int16_t accel_offset[3] = { 346, -677, 699 };
+const int16_t gyro_offset[3] = { 15, -119, 4 };
+uint8_t fifoBuffer[45];
 const int PWMR1{ 11 };
 const int PWMR2{ 6 };
 const int PWML1{ 3 };
@@ -27,7 +33,9 @@ enum Walls {
   BOTH = 0b0110,
   UTURN = 0b1111
 };
-const float K = { 0.67 };  //0.72
+int ho = 0;
+int gt = 0;
+const float K = 0.04;  //0.67
 float DLcm = 0;
 float FLcm = 0;
 float DRcm = 0;
@@ -40,13 +48,71 @@ int mode = 0;
 unsigned long time = 0;
 
 void turn180() {
-  drive(0, 0);
-  delay(100);
-  drive(-40, 40);
-  delay(490);
+  driveVoltage(0, 0);
+  delay(50);
+  ho = getDegrees();
+  gt = (ho + 180) % 360;
+  if (ho > 180) {
+    while (getDegrees() > gt) {
+      driveVoltage(-1, 1);
+    }
+  } else if (ho < 180) {
+    while (getDegrees() < gt) {
+      driveVoltage(1, -1);
+    }
+  }
 }
 
-float getVoltage() {
+float getDegrees() {
+  if (mpu.dmpGetCurrentFIFOPacket(fifoBuffer)) {
+    Quaternion q;
+    VectorFloat gravity;
+    float ypr[3];
+    mpu.dmpGetQuaternion(&q, fifoBuffer);
+    mpu.dmpGetGravity(&gravity, &q);
+    mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
+    float degr = degrees(ypr[0]);
+    if (degr < 0) {
+      degr = 360 + degr;
+    }
+    return degr;
+  }
+}
+bool initGyro() {
+  Wire.begin();
+  mpu.initialize();
+
+  if (!mpu.testConnection()) {
+    Serial.println(F("MPU6050 connection failed"));
+    return false;
+  } else {
+    Serial.println(F("MPU6050 connection - OK"));
+  }
+
+
+  mpu.dmpInitialize();
+
+  mpu.setXGyroOffset(gyro_offset[0]);
+  mpu.setYGyroOffset(gyro_offset[1]);
+  mpu.setZGyroOffset(gyro_offset[2]);
+  mpu.setXAccelOffset(accel_offset[0]);
+  mpu.setYAccelOffset(accel_offset[1]);
+  mpu.setZAccelOffset(accel_offset[2]);
+
+  mpu.setDMPEnabled(true);
+  return true;
+}
+
+void driveVoltage(float leftV, float rightV) {
+  leftV = constrain(leftV, -8.0, +8.0);
+  float v = getVoltage();
+  int pwmLeft = leftV * 255 / v;
+  rightV = constrain(rightV, -8.0, +8.0);
+  int pwmRight = rightV * 255 / v;
+  drive(pwmLeft, pwmRight);
+}
+
+inline float getVoltage() {
   return analogRead(A7) * K_VOLTAGE;
 }
 
@@ -63,13 +129,13 @@ void turnLeft() {
 }
 
 void turnRight() {
-  drive(50, 50);
-  delay(280);
+  driveVoltage(1.1, 1.1);
+  delay(320);
   digitalWrite(ledYellow, 0);
   digitalWrite(ledBlue, 1);
-  while (DRcm > 10) {
+  while (DRcm > 8) {
     readSensorsCM();
-    drive(70, 30);
+    driveVoltage(1.2, 0.6);
   }
   digitalWrite(ledBlue, 0);
 }
@@ -116,7 +182,7 @@ String getBinStr(byte n) {
 byte getEventSensors() {
   byte DW = 0;
   readSensorsCM();
-  if (FRcm < 6) {
+  if (FRcm < 4) {
     DW++;
   }
   if (DRcm < 20) {
@@ -125,7 +191,7 @@ byte getEventSensors() {
   if (DLcm < 20) {
     DW = DW + 4;
   }
-  if (FLcm < 6) {
+  if (FLcm < 4) {
     DW = DW + 8;
   }
   return DW;
@@ -174,7 +240,8 @@ void raseLeft() {
 }
 
 void raseRight() {
-  const float KR = 1.2;
+  long count = 0;
+  time = millis();
   while (1) {
     // float v = getVoltage() + 0.2;
     readSensorsCM();
@@ -185,25 +252,23 @@ void raseRight() {
     //   delay(690);
     // }
     //else
-    if (event != BOTH) {
-      drive(0, 0);
-      Serial.print(FLcm);
-      Serial.print("    ");
-      Serial.print(DLcm);
-      Serial.print("    ");
-      Serial.print(DRcm);
-      Serial.print("    ");
-      Serial.println(FRcm);
-      Serial.print("    ");
-      Serial.println(DLcm + FLcm - DRcm - FRcm);
-      while (1) {
-      }
-    }
+    count++;
+    // if (event != BOTH) {
+    //   drive(0, 0);
+    //   Serial.print(FLcm);
+    //   Serial.print("    ");
+    //   Serial.print(DLcm);
+    //   Serial.print("    ");
+    //   Serial.print(DRcm);
+    //   Serial.print("    ");
+    //   Serial.println(FRcm);
+    //   Serial.print("    ");
+    //   Serial.println(DLcm + FLcm - DRcm - FRcm);
+    //   while (1) {
+    //   }
+    // }
 
 
-    if (event == UTURN) {
-      turn180();
-    }
     // else if (FLcm > 39 && FRcm > 39) {
     //   int delta = DLcm + FLcm - FRcm - DRcm;
     //   drive(speed + 40 - K * delta, speed + 40 + K * delta);
@@ -212,19 +277,27 @@ void raseRight() {
     //   turnLeft();
     // }
     if (event == BOTH) {
-      int delta = DLcm - (DRcm - 4);
-      drive(speed - K * delta, speed + K * delta);
+      int delta = DLcm - DRcm;
+      driveVoltage(1.2 - K * delta, 1.2 + K * delta);
+    } else if (event == UTURN) {
+      turn180();
+    } else if (event == RIGHT) {
+      turnRight();
     }
-    //  else if (event == RIGHT) {
-    //   turnRight();
-    // } else if (event == LEFT) {
+    // else if (event == LEFT) {
     //   int delta = 14 - DRcm;
     //   drive(speed - KR * delta, speed + KR * delta);
     // }
     if (Serial.available()) {
       char c = Serial.read();
       if (c == 's') {
+        long u = millis() - time;
         drive(0, 0);
+        Serial.print(count);
+        Serial.print("    ");
+        Serial.print(u);
+        Serial.print("    ");
+        Serial.print((1000L * count) / u);
         return;
       }
     }
@@ -348,6 +421,11 @@ float getCM(int x, float K, float p) {
   }
 }
 
+void pryamo() {
+  float rew = getDegrees();
+  driveVoltage(2 - rew * 0.03, 2 + rew * 0.03);
+}
+
 void setup() {
   Serial.begin(9600);
   // Set Timer2 PWM mode phase correct(pin 11, pin 3) :
@@ -366,13 +444,24 @@ void setup() {
   pinMode(PWML2, OUTPUT);
   pinMode(button, INPUT_PULLUP);
 
-  for (int i = 1; i < 4; i++) {
-    digitalWrite(ledBlue, 1);
-    digitalWrite(ledYellow, 1);
-    delay(200);
-    digitalWrite(ledBlue, 0);
-    digitalWrite(ledYellow, 0);
-    delay(200);
+  if (initGyro() == true) {
+    for (int i = 1; i < 4; i++) {
+      digitalWrite(ledBlue, 1);
+      digitalWrite(ledYellow, 1);
+      delay(200);
+      digitalWrite(ledBlue, 0);
+      digitalWrite(ledYellow, 0);
+      delay(200);
+    }
+  } else if (initGyro() == false) {
+    for (int i = 1; i < 3; i++) {
+      digitalWrite(ledBlue, 1);
+      digitalWrite(ledYellow, 1);
+      delay(200);
+      digitalWrite(ledBlue, 0);
+      digitalWrite(ledYellow, 0);
+      delay(200);
+    }
   }
   while (time < 6000) {
     time = millis();
@@ -400,7 +489,9 @@ void setup() {
 
 void loop() {
   if (mode == 1) {
-    raseLeft();
+    while (1) {
+      pryamo();
+    }  //raseLeft();
   } else if (mode == 2) {
     raseRight();
   } else {
