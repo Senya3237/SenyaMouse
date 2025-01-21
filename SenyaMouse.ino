@@ -35,6 +35,7 @@ enum Walls {
 };
 int ho = 0;
 int gt = 0;
+int del = 0;
 const float K = 0.04;  //0.67
 float DLcm = 0;
 float FLcm = 0;
@@ -64,6 +65,7 @@ void turn180() {
 }
 
 float getDegrees() {
+  static float degr = 0;
   if (mpu.dmpGetCurrentFIFOPacket(fifoBuffer)) {
     Quaternion q;
     VectorFloat gravity;
@@ -71,13 +73,31 @@ float getDegrees() {
     mpu.dmpGetQuaternion(&q, fifoBuffer);
     mpu.dmpGetGravity(&gravity, &q);
     mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
-    float degr = degrees(ypr[0]);
+    degr = degrees(ypr[0]);
     if (degr < 0) {
       degr = 360 + degr;
     }
-    return degr;
   }
+  return degr;
 }
+
+float getDegrees1() {
+  static float degr = 0;
+  if (mpu.dmpGetCurrentFIFOPacket(fifoBuffer)) {
+    Quaternion q;
+    VectorFloat gravity;
+    float ypr[3];
+    mpu.dmpGetQuaternion(&q, fifoBuffer);
+    mpu.dmpGetGravity(&gravity, &q);
+    mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
+    degr = degrees(ypr[0]);
+    // if (degr < 0) {
+    //   degr = 360 + degr;
+    // }
+  }
+  return degr;
+}
+
 bool initGyro() {
   Wire.begin();
   mpu.initialize();
@@ -129,14 +149,18 @@ void turnLeft() {
 }
 
 void turnRight() {
-  driveVoltage(1.1, 1.1);
-  delay(320);
+  pryamo();
+  delay(800);
   digitalWrite(ledYellow, 0);
   digitalWrite(ledBlue, 1);
-  while (DRcm > 8) {
-    readSensorsCM();
-    driveVoltage(1.2, 0.6);
+  ho = getDegrees();
+  gt = (ho + 90) % 360;
+  //del = gt - ho;
+  while (abs(gt - getDegrees()) > 5) {
+    driveVoltage(1, -1);
   }
+  driveVoltage(1.1, 1.1);
+  delay(800);
   digitalWrite(ledBlue, 0);
 }
 
@@ -185,10 +209,10 @@ byte getEventSensors() {
   if (FRcm < 4) {
     DW++;
   }
-  if (DRcm < 20) {
+  if (DRcm < 23) {
     DW = DW + 2;
   }
-  if (DLcm < 20) {
+  if (DLcm < 23) {
     DW = DW + 4;
   }
   if (FLcm < 4) {
@@ -422,12 +446,13 @@ float getCM(int x, float K, float p) {
 }
 
 void pryamo() {
-  float rew = getDegrees();
-  driveVoltage(2 - rew * 0.03, 2 + rew * 0.03);
+  float rew = getDegrees1();
+  driveVoltage(1 - rew * 0.03, 1 + rew * 0.03);
 }
 
 void setup() {
   Serial.begin(9600);
+  float ypr[3];
   // Set Timer2 PWM mode phase correct(pin 11, pin 3) :
   // 16 000 000 / (32 * 510) = 980.39Hz
   // CS22 CS21 CS20  011 - prescale 32
@@ -452,6 +477,7 @@ void setup() {
       digitalWrite(ledBlue, 0);
       digitalWrite(ledYellow, 0);
       delay(200);
+      Serial.println(getDegrees());
     }
   } else if (initGyro() == false) {
     for (int i = 1; i < 3; i++) {
