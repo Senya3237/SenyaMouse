@@ -36,7 +36,7 @@ enum Walls {
 int ho = 0;
 int gt = 0;
 int del = 0;
-const float K = 0.04;  //0.67
+const float K = 0.025;  //0.67
 float DLcm = 0;
 float FLcm = 0;
 float DRcm = 0;
@@ -47,6 +47,10 @@ int DR = 0;
 int FR = 0;
 int mode = 0;
 unsigned long time = 0;
+float Fx1FL = 0;
+float Fx2DL = 0;
+float Fx3DR = 0;
+float Fx4FR = 0;
 
 void turn180() {
   driveVoltage(0, 0);
@@ -64,6 +68,32 @@ void turn180() {
   }
 }
 
+void firstSenors() {
+  readSensorsCM();
+  Fx1FL = FL;
+  Fx2DL = DL;
+  Fx3DR = DR;
+  Fx4FR = FR;
+}
+
+void sensorAlpha() {
+  readSensorsCM();
+  float x = 0;
+  float d = 0.03;
+  x = FL;
+  Fx1FL = x * d + (1 - d) * Fx1FL;
+  x = DL;
+  Fx2DL = x * d + (1 - d) * Fx2DL;
+  x = DR;
+  Fx3DR = x * d + (1 - d) * Fx3DR;
+  x = FR;
+  Fx4FR = x * d + (1 - d) * Fx4FR;
+  FL = Fx1FL;
+  DL = Fx2DL;
+  DR = Fx3DR;
+  FR = Fx4FR;
+}
+
 float getDegrees() {
   static float degr = 0;
   if (mpu.dmpGetCurrentFIFOPacket(fifoBuffer)) {
@@ -77,23 +107,6 @@ float getDegrees() {
     if (degr < 0) {
       degr = 360 + degr;
     }
-  }
-  return degr;
-}
-
-float getDegrees1() {
-  static float degr = 0;
-  if (mpu.dmpGetCurrentFIFOPacket(fifoBuffer)) {
-    Quaternion q;
-    VectorFloat gravity;
-    float ypr[3];
-    mpu.dmpGetQuaternion(&q, fifoBuffer);
-    mpu.dmpGetGravity(&gravity, &q);
-    mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
-    degr = degrees(ypr[0]);
-    // if (degr < 0) {
-    //   degr = 360 + degr;
-    // }
   }
   return degr;
 }
@@ -165,6 +178,23 @@ void turnRight() {
 }
 
 void drive(int left, int right) {
+  if (left > 160 || right > 160 || left < -160 || right < -160) {
+    readSensorsCM();
+    float r = getVoltage() + 0.2;
+    byte event = getEventSensors();
+    String strBin = getBinStr(event);
+    Serial.print(FLcm);
+    Serial.print("    ");
+    Serial.print(DLcm);
+    Serial.print("    ");
+    Serial.print(DRcm);
+    Serial.print("    ");
+    Serial.println(FRcm);
+    Serial.print("    ");
+    Serial.println(DLcm + FLcm - DRcm - FRcm);
+    Serial.println(strBin);
+    Serial.println(r);
+  }
   left = constrain(left, Min, Max);
   right = constrain(right, Min, Max);
   if (left > 0) {
@@ -212,7 +242,7 @@ byte getEventSensors() {
   if (DRcm < 23) {
     DW = DW + 2;
   }
-  if (DLcm < 23) {
+  if (DLcm < 18) {
     DW = DW + 4;
   }
   if (FLcm < 4) {
@@ -268,7 +298,8 @@ void raseRight() {
   time = millis();
   while (1) {
     // float v = getVoltage() + 0.2;
-    readSensorsCM();
+    sensorAlpha();
+    // readSensorsCM();
     byte event = getEventSensors();
     // if (FLcm < THf && DLcm < THf && DRcm < THf && FRcm < THf) {
     //   drive(0, 0);
@@ -276,7 +307,7 @@ void raseRight() {
     //   delay(690);
     // }
     //else
-    count++;
+    //count++;
     // if (event != BOTH) {
     //   drive(0, 0);
     //   Serial.print(FLcm);
@@ -302,16 +333,15 @@ void raseRight() {
     // }
     if (event == BOTH) {
       int delta = DLcm - DRcm;
-      driveVoltage(1.2 - K * delta, 1.2 + K * delta);
+      driveVoltage(1 - K * delta, 1 + K * delta);
     } else if (event == UTURN) {
       turn180();
     } else if (event == RIGHT) {
       turnRight();
+    } else if (event == LEFT) {
+      int delta = 14 - DRcm;
+      driveVoltage(1 - K * delta, 1 + K * delta);
     }
-    // else if (event == LEFT) {
-    //   int delta = 14 - DRcm;
-    //   drive(speed - KR * delta, speed + KR * delta);
-    // }
     if (Serial.available()) {
       char c = Serial.read();
       if (c == 's') {
@@ -446,13 +476,14 @@ float getCM(int x, float K, float p) {
 }
 
 void pryamo() {
-  float rew = getDegrees1();
+  float rew = getDegrees() - 180;
   driveVoltage(1 - rew * 0.03, 1 + rew * 0.03);
 }
 
 void setup() {
   Serial.begin(9600);
   float ypr[3];
+  firstSenors();
   // Set Timer2 PWM mode phase correct(pin 11, pin 3) :
   // 16 000 000 / (32 * 510) = 980.39Hz
   // CS22 CS21 CS20  011 - prescale 32
@@ -516,7 +547,7 @@ void setup() {
 void loop() {
   if (mode == 1) {
     while (1) {
-      pryamo();
+      //pryamo();
     }  //raseLeft();
   } else if (mode == 2) {
     raseRight();
