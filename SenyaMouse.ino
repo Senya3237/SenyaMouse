@@ -28,6 +28,7 @@ const float ADC_MAX = 1023.0;
 const float ADC_REF_VOLTS = 5.00;
 const float K_VOLTAGE = ADC_REF_VOLTS / ADC_MAX / BATTERY_DIVIDER_RATIO;
 enum Walls {
+  NOTHING = 0b0000,
   LEFT = 0b0010,
   RIGHT = 0b0100,
   BOTH = 0b0110,
@@ -163,17 +164,17 @@ inline float getVoltage() {
   return analogRead(A7) * K_VOLTAGE;
 }
 
-void turnLeft() {
-  drive(50, 50);
-  delay(250);
-  digitalWrite(ledYellow, 1);
-  digitalWrite(ledBlue, 0);
-  while (DLcm > 10) {
-    drive(30, 70);
-    readSensorsCM();
-  }
-  digitalWrite(ledYellow, 0);
-}
+// void turnLeft() {
+//   drive(50, 50);
+//   delay(250);
+//   digitalWrite(ledYellow, 1);
+//   digitalWrite(ledBlue, 0);
+//   while (DLcm > 10) {
+//     drive(30, 70);
+//     readSensorsCM();
+//   }
+//   digitalWrite(ledYellow, 0);
+// }
 
 // void turn90() {
 //   float now = getDegrees();
@@ -186,6 +187,21 @@ void turnLeft() {
 
 //     while
 //   }
+
+void turnLeft() {
+  pryamo(650);
+  digitalWrite(ledYellow, 0);
+  digitalWrite(ledBlue, 1);
+  ho = getDegrees();
+  gt = (ho + 270) % 360;
+  driveVoltage(-1, 1);
+  while (abs(gt - getDegrees()) > 13) {
+  }
+  driveVoltage(0, 0);
+  delay(100);
+  pryamo(30);
+  digitalWrite(ledBlue, 0);
+}
 
 void turnRight() {
   pryamo(650);
@@ -365,7 +381,13 @@ void raseRight() {
       turnRight();
     } else if (event == LEFT) {
       int delta = 10 - DRcm;
+      readSensorsCM();
+      if (FLcm < 13 && FRcm < 13) {
+        pryamo(800);
+      }
       driveVoltage(1 - K * delta, 1 + K * delta);
+    } else if (event == NOTHING) {
+      driveVoltage(1.3, 1.3);
     }
     if (Serial.available()) {
       char c = Serial.read();
@@ -595,7 +617,7 @@ void loop() {
   } else if (mode == 2) {
     raseRight();
   } else {
-    driveVoltage(3,3);  
+    driveVoltage(3, 3);
   }
   if (Serial.available()) {
     char c = Serial.read();
