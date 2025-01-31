@@ -36,7 +36,7 @@ enum Walls {
 int ho = 0;
 int gt = 0;
 int del = 0;
-const float K = 0.025;  //0.67
+const float K = 0.045;  //0.67
 float DLcm = 0;
 float FLcm = 0;
 float DRcm = 0;
@@ -53,19 +53,32 @@ float Fx3DR = 0;
 float Fx4FR = 0;
 
 void turn180() {
+  digitalWrite(ledBlue, 1);
+  digitalWrite(ledYellow, 1);
+  readSensorsCM();
   driveVoltage(0, 0);
   delay(50);
-  ho = getDegrees();
-  gt = (ho + 180) % 360;
-  if (ho > 180) {
-    while (getDegrees() > gt) {
-      driveVoltage(-1, 1);
-    }
-  } else if (ho < 180) {
-    while (getDegrees() < gt) {
-      driveVoltage(1, -1);
-    }
+  driveVoltage(-1.4, 1.4);
+  while (FLcm < 15 && FRcm < 15) {
+    readSensorsCM();
   }
+  driveVoltage(-1.4, 1.4);
+  delay(100);
+  digitalWrite(ledBlue, 1);
+  digitalWrite(ledYellow, 1);
+  driveVoltage(0, 0);
+  delay(50);
+  // ho = getDegrees();
+  // gt = (ho + 180) % 360;
+  // if (ho > 180) {
+  //   while (getDegrees() > gt) {
+  //     driveVoltage(-1, 1);
+  //   }
+  // } else if (ho < 180) {
+  //   while (getDegrees() < gt) {
+  //     driveVoltage(1, -1);
+  //   }
+  // }
 }
 
 void firstSenors() {
@@ -96,10 +109,10 @@ void sensorAlpha() {
 
 float getDegrees() {
   static float degr = 0;
+  static Quaternion q;
+  static VectorFloat gravity;
+  static float ypr[3]{};
   if (mpu.dmpGetCurrentFIFOPacket(fifoBuffer)) {
-    Quaternion q;
-    VectorFloat gravity;
-    float ypr[3];
     mpu.dmpGetQuaternion(&q, fifoBuffer);
     mpu.dmpGetGravity(&gravity, &q);
     mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
@@ -136,11 +149,12 @@ bool initGyro() {
   return true;
 }
 
-void driveVoltage(float leftV, float rightV) {
-  leftV = constrain(leftV, -8.0, +8.0);
+inline void driveVoltage(float leftV, float rightV) {
+  rightV = rightV * 1.05;
+  //leftV = constrain(leftV, -8.0, +8.0);
   float v = getVoltage();
   int pwmLeft = leftV * 255 / v;
-  rightV = constrain(rightV, -8.0, +8.0);
+  //rightV = constrain(rightV, -8.0, +8.0);
   int pwmRight = rightV * 255 / v;
   drive(pwmLeft, pwmRight);
 }
@@ -161,19 +175,30 @@ void turnLeft() {
   digitalWrite(ledYellow, 0);
 }
 
+// void turn90() {
+//   float now = getDegrees();
+
+//   if (target - rew > 180) {
+//     rew = rew + 360;
+//   }
+
+//     float rew = getDegrees();
+
+//     while
+//   }
+
 void turnRight() {
-  pryamo();
-  delay(800);
+  pryamo(650);
   digitalWrite(ledYellow, 0);
   digitalWrite(ledBlue, 1);
   ho = getDegrees();
   gt = (ho + 90) % 360;
-  //del = gt - ho;
-  while (abs(gt - getDegrees()) > 5) {
-    driveVoltage(1, -1);
+  driveVoltage(1, -1);
+  while (abs(gt - getDegrees()) > 13) {
   }
-  driveVoltage(1.1, 1.1);
-  delay(800);
+  driveVoltage(0, 0);
+  delay(100);
+  pryamo(30);
   digitalWrite(ledBlue, 0);
 }
 
@@ -236,7 +261,7 @@ String getBinStr(byte n) {
 byte getEventSensors() {
   byte DW = 0;
   readSensorsCM();
-  if (FRcm < 4) {
+  if (FRcm < 5) {
     DW++;
   }
   if (DRcm < 23) {
@@ -245,7 +270,7 @@ byte getEventSensors() {
   if (DLcm < 18) {
     DW = DW + 4;
   }
-  if (FLcm < 4) {
+  if (FLcm < 5) {
     DW = DW + 8;
   }
   return DW;
@@ -333,13 +358,13 @@ void raseRight() {
     // }
     if (event == BOTH) {
       int delta = DLcm - DRcm;
-      driveVoltage(1 - K * delta, 1 + K * delta);
+      driveVoltage(1.5 - K * delta, 1.5 + K * delta);
     } else if (event == UTURN) {
       turn180();
     } else if (event == RIGHT) {
       turnRight();
     } else if (event == LEFT) {
-      int delta = 14 - DRcm;
+      int delta = 10 - DRcm;
       driveVoltage(1 - K * delta, 1 + K * delta);
     }
     if (Serial.available()) {
@@ -475,9 +500,30 @@ float getCM(int x, float K, float p) {
   }
 }
 
-void pryamo() {
-  float rew = getDegrees() - 180;
-  driveVoltage(1 - rew * 0.03, 1 + rew * 0.03);
+void pryamo(int t) {
+  readSensorsCM();
+  long mil = millis();
+  float target = getDegrees();
+  while ((millis() - mil) < t && (FLcm > 6 && FRcm > 6)) {
+    readSensorsCM();
+    float rew = getDegrees();
+    if (target - rew > 180) {
+      rew = rew + 360;
+    }
+    float error = target - rew;
+    driveVoltage(1.2 + error * 0.03, 1.2 - error * 0.03);
+    // Serial.print(target);
+    // Serial.print(' ');
+    // Serial.print(' ');
+    // Serial.print(' ');
+    // Serial.print(rew);
+    // Serial.print(' ');
+    // Serial.print(' ');
+    // Serial.print(' ');
+    // Serial.println(error);
+    // delay(800);
+  }
+  //driveVoltage(1.2 - error * 0.03, 1.2 + error * 0.03);
 }
 
 void setup() {
@@ -546,13 +592,10 @@ void setup() {
 
 void loop() {
   if (mode == 1) {
-    while (1) {
-      //pryamo();
-    }  //raseLeft();
   } else if (mode == 2) {
     raseRight();
   } else {
-    rase();
+    driveVoltage(3,3);  
   }
   if (Serial.available()) {
     char c = Serial.read();
