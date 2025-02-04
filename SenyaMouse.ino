@@ -37,7 +37,6 @@ enum Walls {
 int ho = 0;
 int gt = 0;
 int del = 0;
-const float K = 0.045;  //0.67
 float DLcm = 0;
 float FLcm = 0;
 float DRcm = 0;
@@ -52,6 +51,14 @@ float Fx1FL = 0;
 float Fx2DL = 0;
 float Fx3DR = 0;
 float Fx4FR = 0;
+
+//------------надо менять-------------------
+
+const float K = 0.055;
+const float K180a = 0.08;
+const int tim = 200;
+
+//-----------------180----------------------
 
 void turn180() {
   digitalWrite(ledBlue, 1);
@@ -69,18 +76,15 @@ void turn180() {
   digitalWrite(ledYellow, 1);
   driveVoltage(0, 0);
   delay(50);
-  // ho = getDegrees();
-  // gt = (ho + 180) % 360;
-  // if (ho > 180) {
-  //   while (getDegrees() > gt) {
-  //     driveVoltage(-1, 1);
-  //   }
-  // } else if (ho < 180) {
-  //   while (getDegrees() < gt) {
-  //     driveVoltage(1, -1);
-  //   }
-  // }
+  long mill = millis();
+  while ((millis() - mill) < tim) {
+    readSensorsCM();
+    int delta = DLcm - DRcm;
+    driveVoltage(1.2 - K180a * delta, 1.2 + K180a * delta);
+  }
 }
+
+//--------------------------------------------
 
 void firstSenors() {
   readSensorsCM();
@@ -89,6 +93,8 @@ void firstSenors() {
   Fx3DR = DR;
   Fx4FR = FR;
 }
+
+//-----------------------------------------------
 
 void sensorAlpha() {
   readSensorsCM();
@@ -108,6 +114,8 @@ void sensorAlpha() {
   FR = Fx4FR;
 }
 
+//----------------------------------------------------
+
 float getDegrees() {
   static float degr = 0;
   static Quaternion q;
@@ -124,6 +132,8 @@ float getDegrees() {
   }
   return degr;
 }
+
+//----------------------------------------------------
 
 bool initGyro() {
   Wire.begin();
@@ -149,6 +159,8 @@ bool initGyro() {
   mpu.setDMPEnabled(true);
   return true;
 }
+
+//----------------------------------------------------
 
 inline void driveVoltage(float leftV, float rightV) {
   rightV = rightV * 1.05;
@@ -188,6 +200,8 @@ inline float getVoltage() {
 //     while
 //   }
 
+//----------------------------------------------------
+
 void turnLeft() {
   pryamo(650);
   digitalWrite(ledYellow, 0);
@@ -203,6 +217,8 @@ void turnLeft() {
   digitalWrite(ledBlue, 0);
 }
 
+//----------------------------------------------------
+
 void turnRight() {
   pryamo(650);
   digitalWrite(ledYellow, 0);
@@ -217,6 +233,8 @@ void turnRight() {
   pryamo(30);
   digitalWrite(ledBlue, 0);
 }
+
+//----------------------------------------------------
 
 void drive(int left, int right) {
   if (left > 160 || right > 160 || left < -160 || right < -160) {
@@ -254,6 +272,8 @@ void drive(int left, int right) {
   }
 }
 
+//----------------------------------------------------
+
 String getBinStr(byte n) {
   String str = "0000";
   if (n >= 8) {
@@ -274,6 +294,8 @@ String getBinStr(byte n) {
   return str;
 }
 
+//----------------------------------------------------
+
 byte getEventSensors() {
   byte DW = 0;
   readSensorsCM();
@@ -291,6 +313,8 @@ byte getEventSensors() {
   }
   return DW;
 }
+
+//----------------------------------------------------
 
 void raseLeft() {
   while (1) {
@@ -333,6 +357,8 @@ void raseLeft() {
     }
   }  // while
 }
+
+//----------------------------------------------------
 
 void raseRight() {
   long count = 0;
@@ -382,11 +408,13 @@ void raseRight() {
     } else if (event == LEFT) {
       int delta = 10 - DRcm;
       readSensorsCM();
-      if (FLcm < 13 && FRcm < 13) {
+      if (FLcm < 15 && FRcm < 15) {
         pryamo(800);
       }
       driveVoltage(1 - K * delta, 1 + K * delta);
     } else if (event == NOTHING) {
+      driveVoltage(1.3, 1.3);
+    } else {
       driveVoltage(1.3, 1.3);
     }
     if (Serial.available()) {
@@ -404,6 +432,8 @@ void raseRight() {
     }
   }  // while
 }
+
+//----------------------------------------------------
 
 void rase() {
   while (1) {
@@ -442,6 +472,8 @@ void rase() {
   }  // while
 }
 
+//----------------------------------------------------
+
 void printSensors() {
   readSensors();
   Serial.print(FL);
@@ -454,6 +486,8 @@ void printSensors() {
   Serial.print("    ");
   Serial.println(DL + FL - DR - FR);
 }
+
+//----------------------------------------------------
 
 void testDrive() {
   drive(-60, -60);
@@ -470,6 +504,8 @@ void testDrive() {
   }
 }
 
+//----------------------------------------------------
+
 void readSensorsCM() {
   readSensors();
   FLcm = getCM(FL, 3112.3, 1.601);
@@ -477,6 +513,8 @@ void readSensorsCM() {
   DRcm = getCM(DR, 1859.9, 1.926);
   FRcm = getCM(FR, 4113.1, 1.548);
 }
+
+//----------------------------------------------------
 
 void printSensorsCM() {
   readSensorsCM();
@@ -496,6 +534,8 @@ void printSensorsCM() {
   Serial.println(r);
 }
 
+//----------------------------------------------------
+
 void readSensors() {
   digitalWrite(D, 1);
   delay(1);
@@ -514,6 +554,8 @@ void readSensors() {
   digitalWrite(F, 0);
 }
 
+//----------------------------------------------------
+
 float getCM(int x, float K, float p) {
   if (x == 0) {
     return 50;
@@ -521,6 +563,8 @@ float getCM(int x, float K, float p) {
     return exp(log(K / float(x)) / p);
   }
 }
+
+//----------------------------------------------------
 
 void pryamo(int t) {
   readSensorsCM();
@@ -547,6 +591,8 @@ void pryamo(int t) {
   }
   //driveVoltage(1.2 - error * 0.03, 1.2 + error * 0.03);
 }
+
+//----------------------------------------------------
 
 void setup() {
   Serial.begin(9600);
@@ -612,6 +658,8 @@ void setup() {
   // }
 }
 
+//----------------------------------------------------
+
 void loop() {
   if (mode == 1) {
   } else if (mode == 2) {
@@ -640,3 +688,5 @@ void loop() {
   }
   // delay(100);
 }
+
+//----------------------------------------------------
