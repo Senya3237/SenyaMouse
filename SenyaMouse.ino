@@ -34,6 +34,8 @@ enum Walls {
   BOTH = 0b0110,
   UTURN = 0b1111
 };
+float delta = 0;
+float lastDelta = 0;
 int ho = 0;
 int gt = 0;
 int del = 0;
@@ -55,6 +57,7 @@ float Fx4FR = 0;
 //------------надо менять-------------------
 
 const float K = 0.055;
+const float KD = 0.55;
 const float K180a = 0.08;
 const int tim = 200;
 
@@ -84,7 +87,7 @@ void turn180() {
   }
 }
 
-//--------------------------------------------
+//------------------0ые значения-----------------
 
 void firstSenors() {
   readSensorsCM();
@@ -94,7 +97,7 @@ void firstSenors() {
   Fx4FR = FR;
 }
 
-//-----------------------------------------------
+//------------------плавные значения----------------------
 
 void sensorAlpha() {
   readSensorsCM();
@@ -114,7 +117,7 @@ void sensorAlpha() {
   FR = Fx4FR;
 }
 
-//----------------------------------------------------
+//-------------------значения гироскоп 0-360-------------------------
 
 float getDegrees() {
   static float degr = 0;
@@ -133,7 +136,7 @@ float getDegrees() {
   return degr;
 }
 
-//----------------------------------------------------
+//----------------------гироскоп-----------------------
 
 bool initGyro() {
   Wire.begin();
@@ -160,10 +163,10 @@ bool initGyro() {
   return true;
 }
 
-//----------------------------------------------------
+//---------------------драйв по акуму-------------------------
 
 inline void driveVoltage(float leftV, float rightV) {
-  rightV = rightV * 1.05;
+  rightV = rightV * 1.02;
   //leftV = constrain(leftV, -8.0, +8.0);
   float v = getVoltage();
   int pwmLeft = leftV * 255 / v;
@@ -200,7 +203,7 @@ inline float getVoltage() {
 //     while
 //   }
 
-//----------------------------------------------------
+//-----------------поворот на лево--------------------------
 
 void turnLeft() {
   pryamo(650);
@@ -217,7 +220,7 @@ void turnLeft() {
   digitalWrite(ledBlue, 0);
 }
 
-//----------------------------------------------------
+//--------------------поворот на 90 на прво------------------------
 
 void turnRight() {
   pryamo(650);
@@ -234,7 +237,7 @@ void turnRight() {
   digitalWrite(ledBlue, 0);
 }
 
-//----------------------------------------------------
+//-----------------драйв-------------------------
 
 void drive(int left, int right) {
   if (left > 160 || right > 160 || left < -160 || right < -160) {
@@ -272,7 +275,7 @@ void drive(int left, int right) {
   }
 }
 
-//----------------------------------------------------
+//-------------------перевод в 2ую-------------------------
 
 String getBinStr(byte n) {
   String str = "0000";
@@ -294,7 +297,7 @@ String getBinStr(byte n) {
   return str;
 }
 
-//----------------------------------------------------
+//-------------------значения 1010-------------------------
 
 byte getEventSensors() {
   byte DW = 0;
@@ -302,7 +305,7 @@ byte getEventSensors() {
   if (FRcm < 5) {
     DW++;
   }
-  if (DRcm < 23) {
+  if (DRcm < 20) {
     DW = DW + 2;
   }
   if (DLcm < 18) {
@@ -314,7 +317,7 @@ byte getEventSensors() {
   return DW;
 }
 
-//----------------------------------------------------
+//--------------------по левой руке------------------------
 
 void raseLeft() {
   while (1) {
@@ -358,7 +361,7 @@ void raseLeft() {
   }  // while
 }
 
-//----------------------------------------------------
+//------------------по правой руке-------------------------
 
 void raseRight() {
   long count = 0;
@@ -399,14 +402,18 @@ void raseRight() {
     //   turnLeft();
     // }
     if (event == BOTH) {
-      int delta = DLcm - DRcm;
-      driveVoltage(1.5 - K * delta, 1.5 + K * delta);
+      delta = DLcm - DRcm;
+      lastDelta = delta;
+      float jopa = K * delta + KD * (delta - lastDelta);
+      driveVoltage(1.5 - jopa, 1.5 + jopa);
     } else if (event == UTURN) {
       turn180();
     } else if (event == RIGHT) {
       turnRight();
     } else if (event == LEFT) {
-      int delta = 10 - DRcm;
+      delta = 10 - DRcm;
+      lastDelta = delta;
+      int jopa = K * delta + KD * (delta - lastDelta);
       readSensorsCM();
       if (FLcm < 15 && FRcm < 15) {
         pryamo(800);
@@ -433,7 +440,7 @@ void raseRight() {
   }  // while
 }
 
-//----------------------------------------------------
+//---------------------тестовый рейс------------------------
 
 void rase() {
   while (1) {
@@ -472,7 +479,7 @@ void rase() {
   }  // while
 }
 
-//----------------------------------------------------
+//--------------------принт-----------------------
 
 void printSensors() {
   readSensors();
@@ -487,7 +494,7 @@ void printSensors() {
   Serial.println(DL + FL - DR - FR);
 }
 
-//----------------------------------------------------
+//-----------------------просто тест---------------------
 
 void testDrive() {
   drive(-60, -60);
@@ -504,7 +511,7 @@ void testDrive() {
   }
 }
 
-//----------------------------------------------------
+//-----------------перевод в см-------------------------
 
 void readSensorsCM() {
   readSensors();
@@ -514,7 +521,7 @@ void readSensorsCM() {
   FRcm = getCM(FR, 4113.1, 1.548);
 }
 
-//----------------------------------------------------
+//----------------------значения см------------------------
 
 void printSensorsCM() {
   readSensorsCM();
@@ -534,7 +541,7 @@ void printSensorsCM() {
   Serial.println(r);
 }
 
-//----------------------------------------------------
+//-------------------------сырые значения-----------------------
 
 void readSensors() {
   digitalWrite(D, 1);
@@ -554,7 +561,7 @@ void readSensors() {
   digitalWrite(F, 0);
 }
 
-//----------------------------------------------------
+//---------------------формула см---------------------------
 
 float getCM(int x, float K, float p) {
   if (x == 0) {
@@ -564,7 +571,7 @@ float getCM(int x, float K, float p) {
   }
 }
 
-//----------------------------------------------------
+//------------------------прямо------------------------
 
 void pryamo(int t) {
   readSensorsCM();
@@ -592,7 +599,7 @@ void pryamo(int t) {
   //driveVoltage(1.2 - error * 0.03, 1.2 + error * 0.03);
 }
 
-//----------------------------------------------------
+//----------------------сетап-------------------------
 
 void setup() {
   Serial.begin(9600);
@@ -658,7 +665,7 @@ void setup() {
   // }
 }
 
-//----------------------------------------------------
+//-------------------------луп------------------------
 
 void loop() {
   if (mode == 1) {
