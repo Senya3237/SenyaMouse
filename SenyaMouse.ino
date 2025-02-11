@@ -12,6 +12,7 @@ const int Min{ -50 };
 const int Max{ 200 };
 const int D = { 4 };
 const int F = { 7 };
+const int PinGyro = { 12 };
 const int ledBlue = { 10 };
 const int ledYellow = { 9 };
 const int button = { 2 };
@@ -26,6 +27,7 @@ const float RGND = 0.96;
 const float BATTERY_DIVIDER_RATIO = RGND / (RGND + RVIN);
 const float ADC_MAX = 1023.0;
 const float ADC_REF_VOLTS = 5.00;
+volatile bool mpuReady = false;
 const float K_VOLTAGE = ADC_REF_VOLTS / ADC_MAX / BATTERY_DIVIDER_RATIO;
 enum Walls {
   NOTHING = 0b0000,
@@ -79,12 +81,27 @@ void turn180() {
   digitalWrite(ledYellow, 1);
   driveVoltage(0, 0);
   delay(50);
-  long mill = millis();
-  while ((millis() - mill) < tim) {
-    readSensorsCM();
-    int delta = DLcm - DRcm;
-    driveVoltage(1.2 - K180a * delta, 1.2 + K180a * delta);
+  // long mill = millis();
+  // while ((millis() - mill) < tim) {
+  //   readSensorsCM();
+  //   int delta = DLcm - DRcm;
+  //   driveVoltage(1.2 - K180a * delta, 1.2 + K180a * delta);
+  // }
+}
+
+//-----------------------прерывание готово----------------------------------
+
+ISR(PCINT0_vect) {
+  if (PINB & 0x10) {
+    mpuReady = true;
   }
+}
+
+//-------------------прерывание гироскопа-----------------------------
+
+inline void enableIntGyro() {
+  bitSet(PCICR, PCIF0);
+  bitSet(PCMSK0, PCINT4);
 }
 
 //------------------0ые значения-----------------
@@ -124,7 +141,7 @@ float getDegrees() {
   static Quaternion q;
   static VectorFloat gravity;
   static float ypr[3]{};
-  if (mpu.dmpGetCurrentFIFOPacket(fifoBuffer)) {
+  if (mpuReady && mpu.dmpGetCurrentFIFOPacket(fifoBuffer)) {
     mpu.dmpGetQuaternion(&q, fifoBuffer);
     mpu.dmpGetGravity(&gravity, &q);
     mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
@@ -132,6 +149,7 @@ float getDegrees() {
     if (degr < 0) {
       degr = 360 + degr;
     }
+    mpuReady = false;
   }
   return degr;
 }
@@ -160,6 +178,7 @@ bool initGyro() {
   mpu.setZAccelOffset(accel_offset[2]);
 
   mpu.setDMPEnabled(true);
+  enableIntGyro();
   return true;
 }
 
@@ -575,6 +594,10 @@ float getCM(int x, float K, float p) {
 
 void pryamo(int t) {
   readSensorsCM();
+  // byte event = getEventSensors();
+  // if (event = BOTH) {
+  //   return;
+  // }
   long mil = millis();
   float target = getDegrees();
   while ((millis() - mil) < t && (FLcm > 6 && FRcm > 6)) {
@@ -611,6 +634,7 @@ void setup() {
   TCCR2B |= (1 << CS21 | 1 << CS20);
   TCCR2B &= ~(1 << CS22);
 
+  pinMode(PinGyro, INPUT);
   pinMode(D, OUTPUT);
   pinMode(F, OUTPUT);
   pinMode(ledBlue, OUTPUT);
