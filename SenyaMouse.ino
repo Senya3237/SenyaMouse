@@ -21,6 +21,7 @@ const int pinFL = { A3 };
 const int pinDR = { A1 };
 const int pinFR = { A0 };
 const int THf = { 7 };
+long asd2 = 0;
 const int speed = { 50 };  //60
 const float RVIN = 1.98;
 const float RGND = 0.96;
@@ -36,6 +37,8 @@ enum Walls {
   BOTH = 0b0110,
   UTURN = 0b1111
 };
+float spdLeft = 0;
+float spdRight = 0;
 float delta = 0;
 float lastDelta = 0;
 int ho = 0;
@@ -58,7 +61,8 @@ float Fx4FR = 0;
 
 //------------надо менять-------------------
 
-const float K = 0.055;
+const float SpeedBoth = 1.8;
+const float K = 0.075;
 const float KD = 0.55;
 const float K180a = 0.08;
 const int tim = 200;
@@ -71,12 +75,12 @@ void turn180() {
   readSensorsCM();
   driveVoltage(0, 0);
   delay(50);
-  driveVoltage(-1.4, 1.4);
+  driveVoltage(-1.6, 1.6);
   while (FLcm < 15 && FRcm < 15) {
     readSensorsCM();
   }
-  driveVoltage(-1.4, 1.4);
-  delay(100);
+  driveVoltage(-1.6, 1.6);
+  delay(50);
   digitalWrite(ledBlue, 1);
   digitalWrite(ledYellow, 1);
   driveVoltage(0, 0);
@@ -119,7 +123,7 @@ void firstSenors() {
 void sensorAlpha() {
   readSensorsCM();
   float x = 0;
-  float d = 0.03;
+  float d = 0.06;
   x = FL;
   Fx1FL = x * d + (1 - d) * Fx1FL;
   x = DL;
@@ -182,6 +186,41 @@ bool initGyro() {
   return true;
 }
 
+//------------------драйв по акуму плавный--------------------------------------
+
+inline void driveVoltageSmooth(float leftVStart, float leftVMax, float rightVStart, float rightVMax, int timeRun) {
+  float leftStep = (leftVMax - leftVStart) / 8;
+  float rightStep = (rightVMax - rightVStart) / 8;
+  long asd = millis();
+  digitalWrite(ledBlue, 1);
+  digitalWrite(ledYellow, 1);
+
+  //  for (int y = 0; y < 10; y++) {
+  while (millis() - asd < (timeRun * 8)) {
+    if ((millis() - asd2) > timeRun) {
+      spdRight = spdRight + rightStep;
+      spdLeft = spdLeft + leftStep;
+      asd2 = millis();
+    }
+    driveVoltage(spdLeft, spdRight);
+  }
+  // }
+
+  if (spdRight > rightVMax) {
+    spdRight = rightVMax;
+  }
+  if (spdLeft > leftVMax) {
+    spdLeft = leftVMax;
+  }
+  rightVStart = rightVStart * 1.02;
+  //leftV = constrain(leftV, -8.0, +8.0);
+  float v = getVoltage();
+  int pwmLeft = spdLeft * 255 / v;
+  //rightV = constrain(rightV, -8.0, +8.0);
+  int pwmRight = spdRight * 255 / v;
+  drive(pwmLeft, pwmRight);
+}
+
 //---------------------драйв по акуму-------------------------
 
 inline void driveVoltage(float leftV, float rightV) {
@@ -242,13 +281,19 @@ void turnLeft() {
 //--------------------поворот на 90 на прво------------------------
 
 void turnRight() {
-  pryamo(650);
+  // driveVoltage(0, 0);
+  // delay(20);
+  readSensorsCM();
+  if (DLcm < 23 && DRcm < 23) {
+    return;
+  }
+  pryamo(500);
   digitalWrite(ledYellow, 0);
   digitalWrite(ledBlue, 1);
   ho = getDegrees();
   gt = (ho + 90) % 360;
   driveVoltage(1, -1);
-  while (abs(gt - getDegrees()) > 13) {
+  while (abs(gt - getDegrees()) > 10) {
   }
   driveVoltage(0, 0);
   delay(100);
@@ -324,10 +369,10 @@ byte getEventSensors() {
   if (FRcm < 5) {
     DW++;
   }
-  if (DRcm < 20) {
+  if (DRcm < 18) {
     DW = DW + 2;
   }
-  if (DLcm < 18) {
+  if (DLcm < 16) {
     DW = DW + 4;
   }
   if (FLcm < 5) {
@@ -423,21 +468,22 @@ void raseRight() {
     if (event == BOTH) {
       delta = DLcm - DRcm;
       lastDelta = delta;
-      float jopa = K * delta + KD * (delta - lastDelta);
-      driveVoltage(1.5 - jopa, 1.5 + jopa);
+      float znachenie = K * delta + KD * (delta - lastDelta);
+      driveVoltage(SpeedBoth - znachenie, SpeedBoth + znachenie);
+      // driveVoltageSmooth(1.5 - znachenie, 2.0 - znachenie, 1.5 - znachenie, 2.0 - znachenie, 10);
     } else if (event == UTURN) {
       turn180();
     } else if (event == RIGHT) {
       turnRight();
     } else if (event == LEFT) {
-      delta = 10 - DRcm;
+      delta = 11 - DRcm;
       lastDelta = delta;
-      int jopa = K * delta + KD * (delta - lastDelta);
+      //int jopa = K * delta + KD * (delta - lastDelta);
       readSensorsCM();
       if (FLcm < 15 && FRcm < 15) {
         pryamo(800);
       }
-      driveVoltage(1 - K * delta, 1 + K * delta);
+      driveVoltage(1.3 - K * delta, 1.3 + K * delta);
     } else if (event == NOTHING) {
       driveVoltage(1.3, 1.3);
     } else {
@@ -600,14 +646,14 @@ void pryamo(int t) {
   // }
   long mil = millis();
   float target = getDegrees();
-  while ((millis() - mil) < t && (FLcm > 6 && FRcm > 6)) {
+  while ((millis() - mil) < t && (FLcm > 4 && FRcm > 4)) {
     readSensorsCM();
     float rew = getDegrees();
     if (target - rew > 180) {
       rew = rew + 360;
     }
     float error = target - rew;
-    driveVoltage(1.2 + error * 0.03, 1.2 - error * 0.03);
+    driveVoltage(1.4 + error * 0.03, 1.4 - error * 0.03);
     // Serial.print(target);
     // Serial.print(' ');
     // Serial.print(' ');
@@ -693,6 +739,9 @@ void setup() {
 
 void loop() {
   if (mode == 1) {
+    // while (1) {
+    //   driveVoltageSmooth(1.5, 2.0, 1.5, 2.0, 30);
+    // }
   } else if (mode == 2) {
     raseRight();
   } else {
