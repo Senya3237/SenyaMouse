@@ -48,6 +48,11 @@ float DLcm = 0;
 float FLcm = 0;
 float DRcm = 0;
 float FRcm = 0;
+
+float DLmm = 0;
+float FLmm = 0;
+float DRmm = 0;
+float FRmm = 0;
 int DL = 0;
 int FL = 0;
 int DR = 0;
@@ -61,36 +66,86 @@ float Fx4FR = 0;
 
 //------------надо менять-------------------
 
-const float SpeedBoth = 1.8;
-const float K = 0.075;
-const float KD = 0.55;
+const float SpeedBoth = 1.7;
+const float K = 0.003;
+const float KD = 0.45;
 const float K180a = 0.08;
 const int tim = 200;
 
 //-----------------180----------------------
 
+// declaration functions
+void readSensorsMM();
+//readSensorsCM();
+
+
+
 void turn180() {
   digitalWrite(ledBlue, 1);
   digitalWrite(ledYellow, 1);
-  readSensorsCM();
-  driveVoltage(0, 0);
-  delay(50);
-  driveVoltage(-1.6, 1.6);
-  while (FLcm < 15 && FRcm < 15) {
-    readSensorsCM();
+  readSensorsMM();
+  driveVoltage(-1.9, 1.9);
+  delay(200);
+  while (FLmm < 320 && FRmm < 320) {
+    readSensorsMM();
   }
-  driveVoltage(-1.6, 1.6);
-  delay(50);
   digitalWrite(ledBlue, 1);
   digitalWrite(ledYellow, 1);
+}
+
+//------------------------поворот на 90 на лево--------------------------------
+
+void turn90Left(int ti) {
+  long milli = millis();
+  readSensorsMM();
+  if ((DLmm < 120 && DRmm < 120) || (FRmm > 280 && FLmm > 280)) {
+    return;
+  }
+  while (((millis() - milli) < ti) && (FLmm > 45 && FRmm > 45)) {
+    readSensorsMM();
+    delta = 90 - DRmm;
+    driveVoltage(1.5 - K * delta, 1.5 + K * delta);
+  }
+  readSensorsMM();
+  driveVoltage(0, 0);
+
+  delay(50);
+  driveVoltage(1.8, -1.8);
+  delay(130);
+  while (FLmm < 260 && FRmm < 260) {
+    readSensorsMM();
+  }
+  driveVoltage(1.8, 1.8);
+  delay(50);
+  // }
+}
+
+//------------------------поворот на 90 на право--------------------------------
+
+void turn90Right(int ti) {
+  long milli = millis();
+  readSensorsMM();
+  if (DLmm < 180 && DRmm < 180) {
+    return;
+  }
+  while (((millis() - milli) < ti) && (FLmm > 45 && FRmm > 45)) {
+    digitalWrite(ledBlue, 1);
+    digitalWrite(ledYellow, 1);
+    delta = DLmm - 90;
+    lastDelta = delta;
+    readSensorsMM();
+    driveVoltage(1.5 - K * delta, 1.5 + K * delta);
+  }
+  readSensorsMM();
   driveVoltage(0, 0);
   delay(50);
-  // long mill = millis();
-  // while ((millis() - mill) < tim) {
-  //   readSensorsCM();
-  //   int delta = DLcm - DRcm;
-  //   driveVoltage(1.2 - K180a * delta, 1.2 + K180a * delta);
-  // }
+  driveVoltage(1.9, -1.9);
+  delay(130);
+  while (FLmm < 260 && FRmm < 260) {
+    readSensorsMM();
+  }
+  driveVoltage(1.7, 1.7);
+  delay(30);
 }
 
 //-----------------------прерывание готово----------------------------------
@@ -111,7 +166,7 @@ inline void enableIntGyro() {
 //------------------0ые значения-----------------
 
 void firstSenors() {
-  readSensorsCM();
+  readSensorsMM();
   Fx1FL = FL;
   Fx2DL = DL;
   Fx3DR = DR;
@@ -121,21 +176,17 @@ void firstSenors() {
 //------------------плавные значения----------------------
 
 void sensorAlpha() {
-  readSensorsCM();
-  float x = 0;
-  float d = 0.06;
-  x = FL;
-  Fx1FL = x * d + (1 - d) * Fx1FL;
-  x = DL;
-  Fx2DL = x * d + (1 - d) * Fx2DL;
-  x = DR;
-  Fx3DR = x * d + (1 - d) * Fx3DR;
-  x = FR;
-  Fx4FR = x * d + (1 - d) * Fx4FR;
-  FL = Fx1FL;
-  DL = Fx2DL;
-  DR = Fx3DR;
-  FR = Fx4FR;
+  readSensorsMM();
+  constexpr float x = 0;
+  constexpr float d = 0.09;
+  Fx1FL = FLmm * d + (1 - d) * Fx1FL;
+  Fx2DL = DLmm * d + (1 - d) * Fx2DL;
+  Fx3DR = DRmm * d + (1 - d) * Fx3DR;
+  Fx4FR = FRmm * d + (1 - d) * Fx4FR;
+  FLmm = Fx1FL;
+  DLmm = Fx2DL;
+  DRmm = Fx3DR;
+  FRmm = Fx4FR;
 }
 
 //-------------------значения гироскоп 0-360-------------------------
@@ -263,64 +314,47 @@ inline float getVoltage() {
 
 //-----------------поворот на лево--------------------------
 
-void turnLeft() {
-  pryamo(650);
-  digitalWrite(ledYellow, 0);
-  digitalWrite(ledBlue, 1);
-  ho = getDegrees();
-  gt = (ho + 270) % 360;
-  driveVoltage(-1, 1);
-  while (abs(gt - getDegrees()) > 13) {
-  }
-  driveVoltage(0, 0);
-  delay(100);
-  pryamo(30);
-  digitalWrite(ledBlue, 0);
-}
+// void turnLeft() {
+//   pryamo(650);
+//   digitalWrite(ledYellow, 0);
+//   digitalWrite(ledBlue, 1);
+//   ho = getDegrees();
+//   gt = (ho + 270) % 360;
+//   driveVoltage(-1, 1);
+//   while (abs(gt - getDegrees()) > 13) {
+//   }
+//   driveVoltage(0, 0);
+//   delay(100);
+//   pryamo(30);
+//   digitalWrite(ledBlue, 0);
+// }
 
 //--------------------поворот на 90 на прво------------------------
 
-void turnRight() {
-  // driveVoltage(0, 0);
-  // delay(20);
-  readSensorsCM();
-  if (DLcm < 23 && DRcm < 23) {
-    return;
-  }
-  pryamo(500);
-  digitalWrite(ledYellow, 0);
-  digitalWrite(ledBlue, 1);
-  ho = getDegrees();
-  gt = (ho + 90) % 360;
-  driveVoltage(1, -1);
-  while (abs(gt - getDegrees()) > 10) {
-  }
-  driveVoltage(0, 0);
-  delay(100);
-  pryamo(30);
-  digitalWrite(ledBlue, 0);
-}
+// void turnRight() {
+//   // driveVoltage(0, 0);
+//   // delay(20);
+//   readSensorsCM();
+//   if (DLcm < 23 && DRcm < 23) {
+//     return;
+//   }
+//   pryamo(500);
+//   digitalWrite(ledYellow, 0);
+//   digitalWrite(ledBlue, 1);
+//   ho = getDegrees();
+//   gt = (ho + 90) % 360;
+//   driveVoltage(1, -1);
+//   while (abs(gt - getDegrees()) > 7) {
+//   }
+//   driveVoltage(0, 0);
+//   delay(100);
+//   pryamo(30);
+//   digitalWrite(ledBlue, 0);
+// }
 
 //-----------------драйв-------------------------
 
 void drive(int left, int right) {
-  if (left > 160 || right > 160 || left < -160 || right < -160) {
-    readSensorsCM();
-    float r = getVoltage() + 0.2;
-    byte event = getEventSensors();
-    String strBin = getBinStr(event);
-    Serial.print(FLcm);
-    Serial.print("    ");
-    Serial.print(DLcm);
-    Serial.print("    ");
-    Serial.print(DRcm);
-    Serial.print("    ");
-    Serial.println(FRcm);
-    Serial.print("    ");
-    Serial.println(DLcm + FLcm - DRcm - FRcm);
-    Serial.println(strBin);
-    Serial.println(r);
-  }
   left = constrain(left, Min, Max);
   right = constrain(right, Min, Max);
   if (left > 0) {
@@ -365,17 +399,17 @@ String getBinStr(byte n) {
 
 byte getEventSensors() {
   byte DW = 0;
-  readSensorsCM();
-  if (FRcm < 5) {
+  readSensorsMM();
+  if (FRmm < 70) {
     DW++;
   }
-  if (DRcm < 18) {
+  if (DRmm < 145) {
     DW = DW + 2;
   }
-  if (DLcm < 16) {
+  if (DLmm < 150) {
     DW = DW + 4;
   }
-  if (FLcm < 5) {
+  if (FLmm < 70) {
     DW = DW + 8;
   }
   return DW;
@@ -400,9 +434,9 @@ void raseLeft() {
     //   int delta = DLcm + FLcm - FRcm - DRcm;
     //   drive(speed + 40 - K * delta, speed + 40 + K * delta);
     // }
-    else if (DLcm > 35) {
-      turnLeft();
-    }
+    // else if (DLcm > 35) {
+    //   turnLeft();
+    // }
     if (event == BOTH) {
       int delta = DLcm - DRcm;
       drive(speed - K * delta, speed + K * delta);
@@ -434,58 +468,22 @@ void raseRight() {
     // float v = getVoltage() + 0.2;
     sensorAlpha();
     // readSensorsCM();
-    byte event = getEventSensors();
-    // if (FLcm < THf && DLcm < THf && DRcm < THf && FRcm < THf) {
-    //   drive(0, 0);
-    //   drive(-40, -40);
-    //   delay(690);
-    // }
-    //else
-    //count++;
-    // if (event != BOTH) {
-    //   drive(0, 0);
-    //   Serial.print(FLcm);
-    //   Serial.print("    ");
-    //   Serial.print(DLcm);
-    //   Serial.print("    ");
-    //   Serial.print(DRcm);
-    //   Serial.print("    ");
-    //   Serial.println(FRcm);
-    //   Serial.print("    ");
-    //   Serial.println(DLcm + FLcm - DRcm - FRcm);
-    //   while (1) {
-    //   }
-    // }
-
-
-    // else if (FLcm > 39 && FRcm > 39) {
-    //   int delta = DLcm + FLcm - FRcm - DRcm;
-    //   drive(speed + 40 - K * delta, speed + 40 + K * delta);
-    // }
-    // else if (DLcm > 35) {
-    //   turnLeft();
-    // }
+    uint8_t event = getEventSensors();
     if (event == BOTH) {
-      delta = DLcm - DRcm;
+      delta = DLmm - DRmm;
       lastDelta = delta;
       float znachenie = K * delta + KD * (delta - lastDelta);
       driveVoltage(SpeedBoth - znachenie, SpeedBoth + znachenie);
-      // driveVoltageSmooth(1.5 - znachenie, 2.0 - znachenie, 1.5 - znachenie, 2.0 - znachenie, 10);
     } else if (event == UTURN) {
       turn180();
     } else if (event == RIGHT) {
-      turnRight();
-    } else if (event == LEFT) {
-      delta = 11 - DRcm;
-      lastDelta = delta;
-      //int jopa = K * delta + KD * (delta - lastDelta);
-      readSensorsCM();
-      if (FLcm < 15 && FRcm < 15) {
-        pryamo(800);
-      }
-      driveVoltage(1.3 - K * delta, 1.3 + K * delta);
-    } else if (event == NOTHING) {
-      driveVoltage(1.3, 1.3);
+      turn90Right(400);
+    }
+    // else if (event == LEFT) {
+    //   turn90Left(400);
+    // }
+    else if (event == NOTHING) {
+      turn90Right(400);
     } else {
       driveVoltage(1.3, 1.3);
     }
@@ -524,9 +522,9 @@ void rase() {
     //   drive(speed + 40 - K * delta, speed + 40 + K * delta);
     // }
     else if (DLcm > 35) {
-      turnLeft();
+      // turnLeft();
     } else if (DRcm > 35) {
-      turnRight();
+      // turnRight();
     } else {
       int delta = DLcm - DRcm;
       drive(speed - K * delta, speed + K * delta);
@@ -576,6 +574,16 @@ void testDrive() {
   }
 }
 
+//-----------------перевод в мм-------------------------
+
+void readSensorsMM() {
+  readSensors();
+  FLmm = getMM(FL, 2089.7, -0.705);
+  DLmm = getMM(DL, 725.92, -0.571);
+  DRmm = getMM(DR, 656.39, -0.602);
+  FRmm = getMM(FR, 2708.3, -0.703);
+}
+
 //-----------------перевод в см-------------------------
 
 void readSensorsCM() {
@@ -586,7 +594,28 @@ void readSensorsCM() {
   FRcm = getCM(FR, 4113.1, 1.548);
 }
 
-//----------------------значения см------------------------
+//----------------------принт мм------------------------
+
+void printSensorsMM() {
+  readSensorsMM();
+  float r = getVoltage() + 0.2;
+  byte event = getEventSensors();
+  String strBin = getBinStr(event);
+  Serial.print(FLmm);
+  Serial.print("    ");
+  Serial.print(DLmm);
+  Serial.print("    ");
+  Serial.print(DRmm);
+  Serial.print("    ");
+  Serial.println(FRmm);
+  Serial.print("    ");
+  Serial.println(DLmm - DRmm);
+  Serial.println(strBin);
+  Serial.println(r);
+  Serial.println(analogRead(A7));
+}
+
+//----------------------принт см------------------------
 
 void printSensorsCM() {
   readSensorsCM();
@@ -623,7 +652,22 @@ void readSensors() {
   // FL = FL / 67.0 * 100;
   // DL = DL / 22.0 * 100;
   // DR = DR / 17.0 * 100;
-  digitalWrite(F, 0);
+  // digitalWrite(F, 0);
+  // Serial.print(FL);
+  // Serial.print("    ");
+  // Serial.print(DL);
+  // Serial.print("    ");
+  // Serial.print(DR);
+  // Serial.print("    ");
+  // Serial.println(FR);
+  // Serial.print("    ");
+}
+
+//---------------------формула мм---------------------------
+
+float getMM(int x, float k, float p) {
+  float ji = pow(x, p);
+  return ji * k;
 }
 
 //---------------------формула см---------------------------
@@ -639,14 +683,14 @@ float getCM(int x, float K, float p) {
 //------------------------прямо------------------------
 
 void pryamo(int t) {
-  readSensorsCM();
+  readSensorsMM();
   // byte event = getEventSensors();
   // if (event = BOTH) {
   //   return;
   // }
   long mil = millis();
   float target = getDegrees();
-  while ((millis() - mil) < t && (FLcm > 4 && FRcm > 4)) {
+  while ((millis() - mil) < t && (FLcm > 26 && FRcm > 26)) {
     readSensorsCM();
     float rew = getDegrees();
     if (target - rew > 180) {
@@ -739,9 +783,7 @@ void setup() {
 
 void loop() {
   if (mode == 1) {
-    // while (1) {
-    //   driveVoltageSmooth(1.5, 2.0, 1.5, 2.0, 30);
-    // }
+
   } else if (mode == 2) {
     raseRight();
   } else {
@@ -752,7 +794,7 @@ void loop() {
     if (c == 'r') {
       while (1) {
         delay(100);
-        printSensorsCM();
+        printSensorsMM();
         if (Serial.available()) {
           char c = Serial.read();
           if (c == 's') {
