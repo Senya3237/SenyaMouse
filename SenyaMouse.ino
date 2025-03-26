@@ -1,15 +1,16 @@
-#include "I2Cdev.h"
-#include "MPU6050_6Axis_MotionApps20.h"
-MPU6050 mpu;
-const int16_t accel_offset[3] = { 346, -677, 699 };
-const int16_t gyro_offset[3] = { 15, -119, 4 };
+#include <Arduino.h>
+// #include "I2Cdev.h"
+// #include "MPU6050_6Axis_MotionApps20.h"
+// MPU6050 mpu;
+// const int16_t accel_offset[3] = { 346, -677, 699 };
+// const int16_t gyro_offset[3] = { 15, -119, 4 };
 uint8_t fifoBuffer[45];
 const int PWMR1{ 11 };
 const int PWMR2{ 6 };
 const int PWML1{ 3 };
 const int PWML2{ 5 };
-const int Min{ -50 };
-const int Max{ 200 };
+const int Min{ -60 };
+const int Max{ 120 };
 const int D = { 4 };
 const int F = { 7 };
 const int PinGyro = { 12 };
@@ -28,11 +29,14 @@ const float ADC_MAX = 1023.0;
 const float ADC_REF_VOLTS = 5.00;
 const float K_VOLTAGE = ADC_REF_VOLTS / ADC_MAX / BATTERY_DIVIDER_RATIO;
 enum Walls {
+  LEFTK = 0b110,
+  RIGHTK = 0b011,
   NOTHING = 0b000,
-  LEFT = 0b001,
-  RIGHT = 0b100,
+  LEFT = 0b100,
+  RIGHT = 0b001,
   BOTH = 0b101,
-  UTURN = 0b111
+  UTURN = 0b111,
+  FRONT = 0b010,
 };
 float spdLeft = 0;
 float spdRight = 0;
@@ -50,6 +54,7 @@ int DR = 0;
 int FR = 0;
 int mode = 0;
 unsigned long time = 0;
+float znachenie = 0;
 float Fx1FL = 0;
 float Fx2DL = 0;
 float Fx3DR = 0;
@@ -57,9 +62,9 @@ float Fx4FR = 0;
 
 //------------надо менять-----------------------------------
 
-const float SpeedBoth = 1.7;
+const float SpeedBoth = 1.6;
 const float K = 0.003;
-const float KD = 0.45;
+const float KD = 0.4;
 const float K180a = 0.08;
 const int tim = 200;
 
@@ -71,36 +76,10 @@ void readSensorsMM();
 void turn180() {
   digitalWrite(ledBlue, 1);
   digitalWrite(ledYellow, 1);
-  driveVoltage(-2.0, 2.0);
+  driveVoltage(-1.5, 1.5);
   do {
     readSensorsMM();
-  } while (FLmm < 380 && FRmm < 380);
-}
-
-//------------------------поворот на 90 на право--------------------------------
-
-void turn90Right(int ti) {
-  long milli = millis();
-  readSensorsMM();
-  if (DLmm < 200 && DRmm < 200) {
-    return;
-  }
-  while (((millis() - milli) < ti) && (FLmm > 45 && FRmm > 45)) {
-    delta = DLmm - 90;
-    lastDelta = delta;
-    readSensorsMM();
-    driveVoltage(1.5 - K * delta, 1.5 + K * delta);
-  }
-  readSensorsMM();
-  driveVoltage(0, 0);
-  delay(50);
-  driveVoltage(2.2, -2.2);
-  delay(130);
-  while (FLmm < 268 && FRmm < 268) {
-    readSensorsMM();
-  }
-  driveVoltage(1.7, 1.7);
-  delay(30);
+  } while (FLmm < 200 && FRmm < 200);
 }
 
 //------------------0ые значения-----------------
@@ -191,13 +170,13 @@ String getBinStr(byte n) {
 byte getEventSensors() {
   byte DW = 0;
   readSensorsMM();
-  if (DRmm < 207) {
+  if (DRmm < 225) {
     DW++;
   }
-  if (FLmm < 70 && FRmm < 70) {
+  if (FLmm < 230 && FRmm < 230) {
     DW = DW + 2;
   }
-  if (DLmm < 207) {
+  if (DLmm < 225) {
     DW = DW + 4;
   }
   return DW;
@@ -215,40 +194,69 @@ void raseRight() {
     // readSensorsCM();
     uint8_t event = getEventSensors();
     if (event == BOTH) {
-      delta = DLmm - (DRmm - 20);
+      delta = DLmm - DRmm;
       lastDelta = delta;
-      float znachenie = K * delta + KD * (delta - lastDelta);
+      znachenie = K * delta + KD * (delta - lastDelta);
       driveVoltage(SpeedBoth - znachenie, SpeedBoth + znachenie);
     } else if (event == UTURN) {
-      turn180();
-    }
-    //  else if (event == RIGHT) {
-    //   turn90Right(450);
-    // }
-    //  else if (event == LEFT) {
-    //   //readSensorsMM();
-    //   delta = 110 - DRmm;
-    //   lastDelta = delta;
-    //   driveVoltage(1.5 - K * delta, 1.5 + K * delta);
-    // }
-    //  else if (event == NOTHING) {
-    //   turn90Right(400);
-    // }
-     else {
-      driveVoltage(1.3, 1.3);
-    }
-    if (Serial.available()) {
-      char c = Serial.read();
-      if (c == 's') {
-        long u = millis() - time;
-        drive(0, 0);
-        Serial.print(count);
-        Serial.print("    ");
-        Serial.print(u);
-        Serial.print("    ");
-        Serial.print((1000L * count) / u);
-        return;
+      readSensorsMM();
+      while (FRmm > 60 && FLmm > 60) {
+        readSensorsMM();
+        delta = DLmm - DRmm;
+        lastDelta = delta;
+        znachenie = K * delta + KD * (delta - lastDelta);
+        driveVoltage(SpeedBoth - znachenie, SpeedBoth + znachenie);
       }
+      turn180();
+    } else if (event == RIGHTK) {
+      driveVoltage(1.5, 1.5);
+      delay(50);
+      readSensorsMM();
+      while (DLmm > 120 || (FRmm < 200 && FLmm < 200)) {
+        driveVoltage(1, 2.5);
+        readSensorsMM();
+      }
+    } else if (event == LEFTK) {
+      driveVoltage(1.5, 1.5);
+      delay(70);
+      readSensorsMM();
+      while (DRmm > 100) {
+        readSensorsMM();
+        if (FRmm < 70 && FLmm < 70) {
+          driveVoltage(0, 0);
+          delay(80);
+          driveVoltage(-1.5, -1.5);
+          delay(120);
+          driveVoltage(0, 0);
+          delay(80);
+          return;
+        }
+        driveVoltage(2.3, 1);
+        readSensorsMM();
+      }
+    } else if (event == LEFT) {
+      driveVoltage(1.5, 1.5);
+      delay(200);
+      while (DRmm > 100) {
+        readSensorsMM();
+        driveVoltage(2.3, 1);
+      }
+    } else if (event == RIGHT) {
+      readSensorsMM();
+      delta = 110 - DRmm;
+      lastDelta = delta;
+      driveVoltage(1.5 - K * delta, 1.5 + K * delta);
+    } else if (event == NOTHING) {
+      readSensorsMM();
+      while (DRmm > 140) {
+        driveVoltage(3.1, 1);
+        readSensorsMM();
+      }
+    } else {
+      delta = DLmm - DRmm;
+      lastDelta = delta;
+      float znachenie = 0.003 * delta + 0.04 * (delta - lastDelta);
+      driveVoltage(SpeedBoth - znachenie, SpeedBoth + znachenie);
     }
   }  // while
 }
@@ -335,7 +343,10 @@ void readSensors() {
 
 //---------------------формула мм---------------------------
 
-float getMM(int x, float k, float p) {
+inline float getMM(int x, float k, float p) {
+  if (x < 5) {
+    return 500;
+  }
   float ji = pow(x, p);
   return ji * k;
 }
