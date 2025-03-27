@@ -62,8 +62,8 @@ float Fx4FR = 0;
 
 //------------надо менять-----------------------------------
 
-const float SpeedBoth = 1.6;
-const float K = 0.003;
+const float SpeedBoth = 1.7;
+const float K = 0.004;
 const float KD = 0.4;
 const float K180a = 0.08;
 const int tim = 200;
@@ -80,6 +80,8 @@ void turn180() {
   do {
     readSensorsMM();
   } while (FLmm < 200 && FRmm < 200);
+  driveVoltage(-1.5, 1.5);
+  delay(50);
 }
 
 //------------------0ые значения-----------------
@@ -208,39 +210,37 @@ void raseRight() {
         driveVoltage(SpeedBoth - znachenie, SpeedBoth + znachenie);
       }
       turn180();
+      driveVoltage(0, 0);
     } else if (event == RIGHTK) {
       driveVoltage(1.5, 1.5);
-      delay(50);
-      readSensorsMM();
-      while (DLmm > 120 || (FRmm < 200 && FLmm < 200)) {
-        driveVoltage(1, 2.5);
+      delay(70);
+      while (DLmm > 110) {
+        driveVoltage(1.3, 2.3);
         readSensorsMM();
       }
+      driveVoltage(0, 0);
     } else if (event == LEFTK) {
       driveVoltage(1.5, 1.5);
       delay(70);
       readSensorsMM();
-      while (DRmm > 100) {
+      while (DRmm > 80) {
         readSensorsMM();
-        if (FRmm < 70 && FLmm < 70) {
-          driveVoltage(0, 0);
-          delay(80);
-          driveVoltage(-1.5, -1.5);
-          delay(120);
-          driveVoltage(0, 0);
-          delay(80);
-          return;
-        }
         driveVoltage(2.3, 1);
         readSensorsMM();
       }
+      driveVoltage(0, 0);
     } else if (event == LEFT) {
+      readSensorsMM();
+      if (DRmm < 225) {
+        return;
+      }
       driveVoltage(1.5, 1.5);
       delay(200);
       while (DRmm > 100) {
         readSensorsMM();
         driveVoltage(2.3, 1);
       }
+      driveVoltage(0, 0);
     } else if (event == RIGHT) {
       readSensorsMM();
       delta = 110 - DRmm;
@@ -252,6 +252,7 @@ void raseRight() {
         driveVoltage(3.1, 1);
         readSensorsMM();
       }
+      driveVoltage(0, 0);
     } else {
       delta = DLmm - DRmm;
       lastDelta = delta;
@@ -357,8 +358,14 @@ void setup() {
   Serial.begin(9600);
   float ypr[3];
   firstSenors();
+  // set up freq PWM
   TCCR2B |= (1 << CS21 | 1 << CS20);
   TCCR2B &= ~(1 << CS22);
+
+  // speed up ADC
+  ADCSRA |= (1 << ADPS2);
+  ADCSRA &= ~(1 << ADPS1);
+  ADCSRA |= (1 << ADPS0);
 
   pinMode(PinGyro, INPUT);
   pinMode(D, OUTPUT);
